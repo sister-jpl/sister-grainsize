@@ -121,9 +121,9 @@ def main():
             progbar(i,img.lines*img.columns, full_progbar = 100)
     print('\n')
 
+    grain_size[(grain_size < 50) | (grain_size > 1000)] = 0
     grain_size[~img.mask['no_data']] = -9999
     grain_size[mask] = -9999
-    grain_size[(grain_size < 50) | (grain_size > 1000)] = -9999
 
     # Export cloud radiance
     grain_header = img.get_header()
@@ -131,6 +131,7 @@ def main():
     grain_header['band names']= ['grain_size_um']
     grain_header['wavelength']= []
     grain_header['fwhm']= []
+
     out_file = args.out_dir + img.base_name + '_grainsize'
     writer = WriteENVI(out_file,grain_header)
     writer.write_band(grain_size,0)
