@@ -122,7 +122,7 @@ def main():
     print('\n')
 
     #Mask pixels outside of bounds
-    grain_size[(grain_size < 50) | (grain_size >= 1000)] = 0
+    grain_size[(grain_size < 60) | (grain_size >= 1000)] = 0
     grain_size[~img.mask['no_data']] = -9999
     grain_size[mask] = -9999
 
