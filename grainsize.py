@@ -2,6 +2,7 @@
 SISTER
 Space-based Imaging Spectroscopy and Thermal PathfindER
 Author: Adam Chlus
+
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, version 3 of the License.
@@ -20,7 +21,6 @@ from hytools_lite.io.envi import WriteENVI
 import numpy as np
 from scipy.interpolate import interp1d
 
-
 def progbar(curr, total, full_progbar = 100):
     '''Display progress bar.
     Gist from:
@@ -38,7 +38,7 @@ def progbar(curr, total, full_progbar = 100):
     print('\r', '#'*filled_progbar + '-'*(full_progbar-filled_progbar), '[{:>7.2%}]'.format(frac), end='')
 
 def main():
-    ''' Estimate effective snow grain size from reflectance data using method of Nolin and Dozier 2000
+    ''' Estimate snow grain size from reflectance data using method of Nolin and Dozier (2000).
 
     Nolin, A. W., & Dozier, J. (2000).
     A hyperspectral method for remotely sensing the grain size of snow.
@@ -49,17 +49,16 @@ def main():
 
     desc = "Estimate snow grain size"
     parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument('input', type=str, metavar='INPUT',
-                        help='Input reflectance file (ENVI header present)')
-    parser.add_argument('out_dir', type=str, metavar='OUTPUT',
+    parser.add_argument('input', type=str,
+                        help='Input reflectance image')
+    parser.add_argument('out_dir', type=str,
                         help='Output directory')
     parser.add_argument('--root_dir', action='store',
                         help='Root of source directory',
                         default=os.path.realpath(os.path.split(__file__)[0]))
-
     parser.add_argument('--verbose',      action='store_true')
     parser.add_argument('--mask', type=str, default=None,
-                        help='External water mask')
+                        help='External snow mask')
 
     args = parser.parse_args()
 
@@ -86,7 +85,7 @@ def main():
         msk = htl.HyTools()
         msk.read_file(args.mask,'envi')
         mask = msk.get_band(0)==2
-    # Use NIR threshold for mask
+    # Use NDSI threshold for mask
     else:
         mask = img.ndi(670,1500) < .9
         mask[~img.mask['no_data']] =False
@@ -104,7 +103,7 @@ def main():
 
         chunk = iterator.read_next()[:,:,wave1_ind:wave2_ind+1]
 
-        # Create water vapor image
+        # Calculate continuum removed spectrum
         slope = (chunk[:,:,-1]-chunk[:,:,0])/(wave2-wave1)
         intercept = chunk[:,:,-1]- wave2*slope
         continuum = np.einsum('i,mj->mji', img.wavelengths[wave1_ind:wave2_ind+1],slope) + np.expand_dims(intercept,axis=2)
@@ -119,13 +118,15 @@ def main():
         i+=grain_chunk.shape[0]*grain_chunk.shape[1]
         if args.verbose:
             progbar(i,img.lines*img.columns, full_progbar = 100)
+
     print('\n')
 
-    grain_size[(grain_size < 50) | (grain_size > 1000)] = 0
+    #Mask pixels outside of bounds
+    grain_size[(grain_size < 50) | (grain_size >= 1000)] = 0
     grain_size[~img.mask['no_data']] = -9999
     grain_size[mask] = -9999
 
-    # Export cloud radiance
+    # Export grain size map
     grain_header = img.get_header()
     grain_header['bands']= 1
     grain_header['band names']= ['grain_size_um']
