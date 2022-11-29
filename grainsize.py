@@ -21,22 +21,6 @@ from hytools_lite.io.envi import WriteENVI
 import numpy as np
 from scipy.interpolate import interp1d
 
-def progbar(curr, total, full_progbar = 100):
-    '''Display progress bar.
-    Gist from:
-    https://gist.github.com/marzukr/3ca9e0a1b5881597ce0bcb7fb0adc549
-
-    Args:
-        curr (int, float): Current task level.
-        total (int, float): Task level at completion.
-        full_progbar (TYPE): Defaults to 100.
-    Returns:
-        None.
-    '''
-    frac = curr/total
-    filled_progbar = round(frac*full_progbar)
-    print('\r', '#'*filled_progbar + '-'*(full_progbar-filled_progbar), '[{:>7.2%}]'.format(frac), end='')
-
 def main():
     ''' Estimate snow grain size from reflectance data using method of Nolin and Dozier (2000).
 
@@ -103,8 +87,6 @@ def main():
         grain_size[iterator.current_line:iterator.current_line+chunk.shape[0],
               iterator.current_column:iterator.current_column+chunk.shape[1]] = grain_chunk
         i+=grain_chunk.shape[0]*grain_chunk.shape[1]
-        if args.verbose:
-            progbar(i,reflectance.lines*reflectance.columns, full_progbar = 100)
 
     print('\n')
 
