@@ -12,6 +12,6 @@ In addition to required MAAP job submission arguments the L2A snow grain size PG
 | l2a_granule| string |L2A corrected reflectance dataset granule URL| -|
 | l2a_frac_cover| string |L2A fractional cover granule URL| -|
 | frac_threshold| float |Fractional cover threshold| 0.6|
-## Ouputs## Algorithm registration
+## Outputs## Algorithm registration
 
-## Exampple
+## Example
