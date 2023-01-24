@@ -5,16 +5,19 @@ Author: Adam Chlus
 
 """
 
-import argparse
+import json
 import os
-import hytools_lite as htl
-from hytools_lite.io.envi import WriteENVI
+import sys
+import shutil
+import hytools as ht
 import numpy as np
+from osgeo import gdal
 from scipy.interpolate import interp1d
+from PIL import Image
 
 def main():
 
-    ''' Estimate snow grain size from reflectance data using method of Nolin and Dozier (2000).
+    ''' Estimate snow grain size from rfl data using method of Nolin and Dozier (2000).
 
     Nolin, A. W., & Dozier, J. (2000).
     A hyperspectral method for remotely sensing the grain size of snow.
@@ -23,90 +26,148 @@ def main():
 
     '''
 
-    desc = "Estimate snow grain size"
-    parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument('rfl_file', type=str,
-                        help='Input reflectance image')
-    parser.add_argument('frac_cover', type=str, default=None,
-                        help='Fractional cover map')
-    parser.add_argument('out_dir', type=str,
-                        help='Output directory')
-    parser.add_argument('--frac_threshold', type=float, default=0.6,
-                        help='Snow fractional cover threshold')
-    args = parser.parse_args()
+    pge_path = os.path.dirname(os.path.realpath(__file__))
 
+    run_config_json = sys.argv[1]
 
-    reflectance = htl.HyTools()
-    reflectance.read_file(args.rfl_file,'envi')
+    with open(run_config_json, 'r') as in_file:
+        run_config =json.load(in_file)
 
-    #Check if input wavelengths cover absorption feat
-    if (reflectance.wavelengths.min() <= 940) & (reflectance.wavelengths.max() >= 1090):
+    os.mkdir('output')
+    os.mkdir('temp')
 
-        # Load band depth and snow size data
-        root_dir =os.path.realpath(os.path.split(__file__)[0])
-        interp_data = np.loadtxt("%s/data/grainsize_v_bandarea_nolin_dozier_2000_interp.csv" % root_dir,
-                                 delimiter = ',').T
-        interpolator = interp1d(interp_data[0],interp_data[1],
-                                kind = 'cubic',fill_value ='extrapolate')
+    CRID = run_config["inputs"]["CRID"]
 
-        # Use external mask
-        if args.frac_cover:
-            msk = htl.HyTools()
-            msk.read_file(args.frac_cover,'envi')
-            mask = msk.get_band(3) < args.frac_threshold
+    rfl_base_name = os.path.basename(run_config['inputs']['l2a_rfl'])
+    sister,sensor,level,product,datetime,in_CRID = rfl_base_name.split('_')
+    rfl_file = f'input/{rfl_base_name}/{rfl_base_name}.bin'
+    rfl_met = rfl_file.replace('.bin','.met.json')
 
-        # Use NDSI threshold for mask
+    fc_base_name = os.path.basename(run_config['inputs']['l2a_frcover'])
+    fc_file = f'input/{fc_base_name}/{fc_base_name}.tif'
+
+    grain_met = f'output/SISTER_{sensor}_L2A_SNOWGRAIN_{datetime}_{CRID}.met.json'
+
+    data = f'{pge_path}/data/grainsize_v_bandarea_nolin_dozier_2000_interp.csv'
+    interp_data = np.loadtxt(data,
+                             delimiter = ',').T
+    interpolator = interp1d(interp_data[0],interp_data[1],
+                            kind = 'cubic',fill_value ='extrapolate')
+
+    # Set fractional cover mask
+    fc_obj = gdal.Open(fc_file)
+    snow_mask = fc_obj.GetRasterBand(4).ReadAsArray() >= run_config['inputs']['snow_cover']
+
+    rfl = ht.HyTools()
+    rfl.read_file(rfl_file,'envi')
+
+    # Get continuum start and end bands
+    wave1, wave2  = 950,1080
+    wave1_ind = rfl.wave_to_band(wave1)
+    wave2_ind = rfl.wave_to_band(wave2)
+
+    grain_size = np.full((rfl.lines,rfl.columns),-1)
+    iterator =rfl.iterate(by = 'chunk',chunk_size = (200,200))
+    i = 0
+
+    while not iterator.complete:
+        chunk = iterator.read_next()[:,:,wave1_ind:wave2_ind+1]
+
+        # Calculate continuum removed spectrum
+        slope = (chunk[:,:,-1]-chunk[:,:,0])/(wave2-wave1)
+        intercept = chunk[:,:,-1]- wave2*slope
+        continuum = np.einsum('i,mj->mji', rfl.wavelengths[wave1_ind:wave2_ind+1],slope) + np.expand_dims(intercept,axis=2)
+
+        depth  = (continuum-chunk)/continuum
+        band_area =np.trapz(depth,axis=2)
+
+        grain_chunk = interpolator(band_area)
+
+        grain_size[iterator.current_line:iterator.current_line+chunk.shape[0],
+              iterator.current_column:iterator.current_column+chunk.shape[1]] = grain_chunk
+        i+=grain_chunk.shape[0]*grain_chunk.shape[1]
+
+    #Mask pixels outside of bounds
+    grain_size[~rfl.mask['no_data']] = -9999
+    grain_size[~snow_mask] = -9999
+    qa_mask = (grain_size > interp_data[1].min()) & (grain_size  < interp_data[1].max())
+
+    temp_file =  f'temp/SISTER_{sensor}_L2A_SNOWGRAIN_{datetime}_{CRID}.tif'
+    grain_file =  temp_file.replace('temp','output')
+
+    band_names = ["snowgrain_size",
+                  "snowgrain_qa_mask"]
+
+    units= ["MICRONS",
+            "NA"]
+
+    descriptions= ["SNOWGRAIN SIZE MICRONS",
+                  "QUALITY ASSURANCE MASK"]
+
+    in_file = gdal.Open(rfl.file_name)
+
+    # Set the output raster transform and projection properties
+    driver = gdal.GetDriverByName("GTIFF")
+    tiff = driver.Create(temp_file,
+                         rfl.columns,
+                         rfl.lines,
+                         2,
+                         gdal.GDT_Float32)
+
+    tiff.SetGeoTransform(in_file.GetGeoTransform())
+    tiff.SetProjection(in_file.GetProjection())
+    tiff.SetMetadataItem("DESCRIPTION","SNOWGRAIN SIZE")
+
+    # Write bands to file
+    for i,band_name in enumerate(band_names,start=1):
+        band = tiff.GetRasterBand(i)
+        if i == 1:
+            band.WriteArray(grain_size)
         else:
-            mask = reflectance.ndi(670,1500) < .9
+            band.WriteArray(qa_mask)
+        band.SetDescription(band_name)
+        band.SetNoDataValue(rfl.no_data)
+        band.SetMetadataItem("UNITS",units[i-1])
+        band.SetMetadataItem("DESCRIPTION",descriptions[i-1])
+    del tiff, driver
 
-        mask[~reflectance.mask['no_data']] =False
+    os.system(f"gdaladdo -minsize 900 {temp_file}")
+    os.system(f"gdal_translate {temp_file} {grain_file} -co COMPRESS=LZW -co TILED=YES -co COPY_SRC_OVERVIEWS=YES")
 
-        # Get continuum start and end bands
-        wave1, wave2  = 950,1080
-        wave1_ind = reflectance.wave_to_band(wave1)
-        wave2_ind = reflectance.wave_to_band(wave2)
+    generate_metadata(rfl_met,
+                      grain_met,
+                      {'product': 'SNOWGRAIN',
+                      'processing_level': 'L2A',
+                      'description' : 'Snow grain size, microns'})
 
-        grain_size = np.full((reflectance.lines,reflectance.columns),-1)
-        iterator =reflectance.iterate(by = 'chunk',chunk_size = (200,200))
-        i = 0
+    qlook = np.copy(grain_size)
+    qlook[(qlook < interp_data[1].min()) | (qlook  > interp_data[1].max())] = 0
+    qlook = (qlook-interp_data[1].min())/(interp_data[1].max()-interp_data[1].min())
+    qlook = (255 * qlook).astype(np.uint8)
 
-        while not iterator.complete:
-            chunk = iterator.read_next()[:,:,wave1_ind:wave2_ind+1]
+    im = Image.fromarray(qlook)
+    im.save(grain_file.replace('tif','png'))
 
-            # Calculate continuum removed spectrum
-            slope = (chunk[:,:,-1]-chunk[:,:,0])/(wave2-wave1)
-            intercept = chunk[:,:,-1]- wave2*slope
-            continuum = np.einsum('i,mj->mji', reflectance.wavelengths[wave1_ind:wave2_ind+1],slope) + np.expand_dims(intercept,axis=2)
+    shutil.copyfile(run_config_json,
+                    grain_file.replace('.tif','.runconfig.json'))
 
-            depth  = (continuum-chunk)/continuum
-            band_area =np.trapz(depth,axis=2)
+    shutil.copyfile('run.log',
+                    grain_file.replace('.tif','.log'))
 
-            grain_chunk = interpolator(band_area)
 
-            grain_size[iterator.current_line:iterator.current_line+chunk.shape[0],
-                  iterator.current_column:iterator.current_column+chunk.shape[1]] = grain_chunk
-            i+=grain_chunk.shape[0]*grain_chunk.shape[1]
 
-        #Mask pixels outside of bounds
-        grain_size[(grain_size < 60) | (grain_size > 1000)] = 0
-        grain_size[~reflectance.mask['no_data']] = -9999
-        grain_size[mask] = -9999
+def generate_metadata(in_file,out_file,metadata):
 
-        # Export grain size map
-        grain_header = reflectance.get_header()
-        grain_header['description']= 'Snow grain size map'
-        grain_header['bands']= 1
-        grain_header['band names']= ['grain_size_um']
-        grain_header['wavelength']= None
-        grain_header['fwhm']= None
-        grain_header['wavelength units']= None
+    with open(in_file, 'r') as in_obj:
+        in_met =json.load(in_obj)
 
-        out_file = args.out_dir + reflectance.base_name + '_grainsize'
-        writer = WriteENVI(out_file,grain_header)
-        writer.write_band(grain_size,0)
+    for key,value in metadata.items():
+        in_met[key] = value
 
-    else:
-        print("Wavelength range does not cover ice absorption feature.")
+    with open(out_file, 'w') as out_obj:
+        json.dump(in_met,out_obj,indent=3)
+
+
 
 if __name__ == "__main__":
     main()
