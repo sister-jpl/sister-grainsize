@@ -11,6 +11,7 @@ import sys
 import shutil
 import hytools as ht
 import numpy as np
+import matplotlib.pyplot as plt
 from osgeo import gdal
 from scipy.interpolate import interp1d
 from PIL import Image
@@ -143,9 +144,13 @@ def main():
     qlook = np.copy(grain_size)
     qlook[(qlook < interp_data[1].min()) | (qlook  > interp_data[1].max())] = 0
     qlook = (qlook-interp_data[1].min())/(interp_data[1].max()-interp_data[1].min())
-    qlook = (255 * qlook).astype(np.uint8)
 
-    im = Image.fromarray(qlook)
+    cmap = plt.get_cmap('cool')
+    qlook = cmap(qlook)[:,:,:3]
+    qlook = (255 * qlook).astype(np.uint8)
+    qlook[grain_size == -9999] = 0
+
+    im = Image.fromarray(qlook, 'RGB')
     im.save(grain_file.replace('tif','png'))
 
     shutil.copyfile(run_config_json,
