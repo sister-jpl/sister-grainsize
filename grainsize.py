@@ -47,7 +47,7 @@ def main():
     fc_base_name = os.path.basename(run_config['inputs']['l2a_frcover'])
     fc_file = f'input/{fc_base_name}/{fc_base_name}.tif'
 
-    grain_met = f'output/SISTER_{sensor}_L2A_SNOWGRAIN_{datetime}_{CRID}.met.json'
+    grain_met = f'output/SISTER_{sensor}_L2B_SNOWGRAIN_{datetime}_{CRID}.met.json'
 
     data = f'{pge_path}/data/grainsize_v_bandarea_nolin_dozier_2000_interp.csv'
     interp_data = np.loadtxt(data,
@@ -93,7 +93,7 @@ def main():
     grain_size[~snow_mask] = -9999
     qa_mask = (grain_size > interp_data[1].min()) & (grain_size  < interp_data[1].max())
 
-    temp_file =  f'temp/SISTER_{sensor}_L2A_SNOWGRAIN_{datetime}_{CRID}.tif'
+    temp_file =  f'temp/SISTER_{sensor}_L2B_SNOWGRAIN_{datetime}_{CRID}.tif'
     grain_file =  temp_file.replace('temp','output')
 
     band_names = ["snowgrain_size",
@@ -138,7 +138,7 @@ def main():
     generate_metadata(rfl_met,
                       grain_met,
                       {'product': 'SNOWGRAIN',
-                      'processing_level': 'L2A',
+                      'processing_level': 'L2B',
                       'description' : 'Snow grain size, microns'})
 
     qlook = np.copy(grain_size)
