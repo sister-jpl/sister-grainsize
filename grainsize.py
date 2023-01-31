@@ -44,7 +44,7 @@ def main():
     rfl_file = f'input/{rfl_base_name}/{rfl_base_name}.bin'
     rfl_met = rfl_file.replace('.bin','.met.json')
 
-    fc_base_name = os.path.basename(run_config['inputs']['l2a_frcover'])
+    fc_base_name = os.path.basename(run_config['inputs']['l2b_frcov'])
     fc_file = f'input/{fc_base_name}/{fc_base_name}.tif'
 
     grain_met = f'output/SISTER_{sensor}_L2B_SNOWGRAIN_{datetime}_{CRID}.met.json'

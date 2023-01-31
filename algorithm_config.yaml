@@ -21,7 +21,7 @@ inputs:
       description:
       required: True
 
-    - name: l2a_frcover
+    - name: l2b_frcov
       description:
       required: True
 
