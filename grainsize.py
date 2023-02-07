@@ -37,17 +37,17 @@ def main():
     os.mkdir('output')
     os.mkdir('temp')
 
-    CRID = run_config["inputs"]["CRID"]
+    crid = run_config["inputs"]["crid"]
 
-    rfl_base_name = os.path.basename(run_config['inputs']['l2a_rfl'])
-    sister,sensor,level,product,datetime,in_CRID = rfl_base_name.split('_')
+    rfl_base_name = os.path.basename(run_config['inputs']['reflectance_dataset'])
+    sister,sensor,level,product,datetime,in_crid = rfl_base_name.split('_')
     rfl_file = f'input/{rfl_base_name}/{rfl_base_name}.bin'
     rfl_met = rfl_file.replace('.bin','.met.json')
 
-    fc_base_name = os.path.basename(run_config['inputs']['l2b_frcov'])
+    fc_base_name = os.path.basename(run_config['inputs']['frcov_dataset'])
     fc_file = f'input/{fc_base_name}/{fc_base_name}.tif'
 
-    grain_met = f'output/SISTER_{sensor}_L2B_SNOWGRAIN_{datetime}_{CRID}.met.json'
+    grain_met = f'output/SISTER_{sensor}_L2B_SNOWGRAIN_{datetime}_{crid}.met.json'
 
     data = f'{pge_path}/data/grainsize_v_bandarea_nolin_dozier_2000_interp.csv'
     interp_data = np.loadtxt(data,
@@ -93,7 +93,7 @@ def main():
     grain_size[~snow_mask] = -9999
     qa_mask = (grain_size > interp_data[1].min()) & (grain_size  < interp_data[1].max())
 
-    temp_file =  f'temp/SISTER_{sensor}_L2B_SNOWGRAIN_{datetime}_{CRID}.tif'
+    temp_file =  f'temp/SISTER_{sensor}_L2B_SNOWGRAIN_{datetime}_{crid}.tif'
     grain_file =  temp_file.replace('temp','output')
 
     band_names = ["snowgrain_size",
@@ -158,7 +158,6 @@ def main():
 
     shutil.copyfile('run.log',
                     grain_file.replace('.tif','.log'))
-
 
 
 def generate_metadata(in_file,out_file,metadata):

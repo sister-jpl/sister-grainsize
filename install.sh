@@ -7,8 +7,6 @@ source activate sister
 conda install gdal -y
 pip install Pillow
 
-git clone https://github.com/EnSpec/hytools.git
+git clone https://github.com/EnSpec/hytools.git -b 1.5.0
 cd hytools
 pip install .
-
-pip install -r ${pge_dir}/requirements.txt

@@ -17,11 +17,11 @@ disk_space: 50GB
 inputs:
 
   file:
-    - name: l2a_rfl
+    - name: reflectance_dataset
       description:
       required: True
 
-    - name: l2b_frcov
+    - name: frcov_dataset
       description:
       required: True
 
@@ -32,7 +32,7 @@ inputs:
       default: '0.6'
       description: Minimum vegetation cover threshold
 
-    - name: CRID
+    - name: crid
       data_type:
       default: '000'
       description: Composite release identifier
