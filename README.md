@@ -1,10 +1,10 @@
 # SISTER Snow grain size PGE Documentation
 
 ## Description
-The L2B snow grain size PGE takes as input surface reflectance and calculates snow grain size using the method of Nolin and Dozier (2000). Snow grain size is modeled as a function of scaled band area centered at the 1030 nm ice absorption feature:![](./examples/prisma_snow_spectrum.png)![](./examples/prisma_grainsize_example1.png)### References - Nolin, A. W., & Dozier, J. (2000).A hyperspectral method for remotely sensing the grain size of snow.Remote sensing of Environment, 74(2), 207-216.[doi.org/10.1016/S0034-4257(00)00111-5](https://doi.org/10.1016/S0034-4257(00)00111-5)
+The L2B snow grain size PGE takes as input surface reflectance and calculates snow grain size using the method of Nolin and Dozier (2000). Snow grain size is modeled as a function of scaled band area centered at the 1030 nm ice absorption feature.![](./examples/prisma_snow_spectrum.png)![](./examples/prisma_grainsize_example1.png)### References - Nolin, A. W., & Dozier, J. (2000).A hyperspectral method for remotely sensing the grain size of snow.Remote sensing of Environment, 74(2), 207-216.[doi.org/10.1016/S0034-4257(00)00111-5](https://doi.org/10.1016/S0034-4257(00)00111-5)
 ## PGE Arguments
 
-In addition to required MAAP job submission arguments the L2A snow grain size PGE also takes the following argument(s):
+In addition to required MAAP job submission arguments the L2B snow grain size PGE also takes the following argument(s):
 
 
 |Argument| Type |  Description | Default|
@@ -12,7 +12,7 @@ In addition to required MAAP job submission arguments the L2A snow grain size PG
 | reflectance_dataset| file |L2A reflectance dataset | -|
 | frcover_dataset| file |L2B fractional cover dataset| -|
 | snow_cover| config |Snow fractional cover threshold| 0.9|
-## Outputs
+## Outputs
 
 The outputs of the L2B snow grainsize PGE use the following naming convention:
 

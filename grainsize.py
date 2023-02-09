@@ -1,8 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 SISTER
 Space-based Imaging Spectroscopy and Thermal PathfindER
 Author: Adam Chlus
-
 """
 
 import json
