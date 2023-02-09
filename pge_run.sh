@@ -7,5 +7,5 @@ pge_dir=$(cd "$(dirname "$0")" ; pwd -P)
 echo "Creating runconfig"
 python ${pge_dir}/generate_runconfig.py inputs.json
 
-echo "Running snow grain size PGE"
+echo "Running L2B snow grain size PGE"
 python ${pge_dir}/grainsize.py runconfig.json
