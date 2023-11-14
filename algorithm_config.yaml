@@ -15,24 +15,21 @@ run_command: sister-grainsize/pge_run.sh
 # set a storage value in GB or MB or KB, e.g. "100GB", "20MB", "10KB"
 disk_space: 50GB
 inputs:
-
   file:
     - name: reflectance_dataset
       description:
       required: True
-
     - name: frcov_dataset
       description:
       required: True
-
-
   config:
     - name: snow_cover
       data_type: number
       default: '0.9'
       description: Minimum vegetation cover threshold
-
     - name: crid
       data_type:
       default: '000'
       description: Composite release identifier
+    - name: experimental
+      default: "True"

@@ -34,6 +34,12 @@ def main():
     with open(run_config_json, 'r') as in_file:
         run_config =json.load(in_file)
 
+    experimental = run_config['inputs']['experimental']
+    if experimental:
+        disclaimer = "(DISCLAIMER: THIS DATA IS EXPERIMENTAL AND NOT INTENDED FOR SCIENTIFIC USE) "
+    else:
+        disclaimer = ""
+
     os.mkdir('output')
     os.mkdir('temp')
 
@@ -117,7 +123,7 @@ def main():
 
     tiff.SetGeoTransform(in_file.GetGeoTransform())
     tiff.SetProjection(in_file.GetProjection())
-    tiff.SetMetadataItem("DESCRIPTION","SNOWGRAIN SIZE")
+    tiff.SetMetadataItem("DESCRIPTION",f"{disclaimer}SNOWGRAIN SIZE")
 
     # Write bands to file
     for i,band_name in enumerate(band_names,start=1):
@@ -139,7 +145,7 @@ def main():
                       grain_met,
                       {'product': 'SNOWGRAIN',
                       'processing_level': 'L2B',
-                      'description' : 'Snow grain size, microns'})
+                      'description' : f'{disclaimer}Snow grain size, microns'})
 
     qlook = np.copy(grain_size)
     qlook[(qlook < interp_data[1].min()) | (qlook  > interp_data[1].max())] = 0
@@ -156,8 +162,14 @@ def main():
     shutil.copyfile(run_config_json,
                     grain_file.replace('.tif','.runconfig.json'))
 
-    shutil.copyfile('run.log',
-                    grain_file.replace('.tif','.log'))
+    if os.path.exists("run.log"):
+        shutil.copyfile('run.log',
+                        grain_file.replace('.tif','.log'))
+
+    # If experimental, prefix filenames with "EXPERIMENTAL-"
+    if experimental:
+        for file in glob.glob(f"output/SISTER*"):
+            shutil.move(file, f"output/EXPERIMENTAL-{os.path.basename(file)}")
 
 
 def generate_metadata(in_file,out_file,metadata):

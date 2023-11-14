@@ -6,6 +6,7 @@ Space-based Imaging Spectroscopy and Thermal PathfindER
 Author: Adam Chlus
 """
 
+import argparse
 import sys
 import json
 
@@ -16,18 +17,24 @@ def main():
 
     '''
 
-    inputs_json  = sys.argv[1]
+    parser = argparse.ArgumentParser(description='Parse inputs to create runconfig.json')
+    parser.add_argument('--reflectance_dataset', help='Path to reflectance dataset')
+    parser.add_argument('--frcov_dataset', help='Path to uncertainty dataset')
+    parser.add_argument('--veg_cover', help='Minimum vegetation cover threshold')
+    parser.add_argument('--crid', help='CRID value')
+    parser.add_argument('--experimental', help='If true then designates data as experiemntal')
+    args = parser.parse_args()
 
-    with open(inputs_json, 'r') as in_file:
-        inputs =json.load(in_file)
+    run_config = {
+        "inputs": {
+            "reflectance_dataset": args.reflectance_dataset,
+            "frcov_dataset": args.frcov_dataset,
+            "snow_cover": float(args.veg_cover),
+            "crid": args.crid
+        }
+    }
+    run_config["inputs"]["experimental"] = True if args.experimental.lower() == "true" else False
 
-    run_config = {"inputs":{}}
-
-    for file_dict in inputs["file"]:
-        for key,value in file_dict.items():
-            run_config["inputs"][key] = value
-
-    run_config["inputs"].update(inputs["config"])
 
     config_file = 'runconfig.json'
 
