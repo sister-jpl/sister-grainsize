@@ -20,7 +20,7 @@ def main():
     parser = argparse.ArgumentParser(description='Parse inputs to create runconfig.json')
     parser.add_argument('--reflectance_dataset', help='Path to reflectance dataset')
     parser.add_argument('--frcov_dataset', help='Path to uncertainty dataset')
-    parser.add_argument('--veg_cover', help='Minimum vegetation cover threshold')
+    parser.add_argument('--snow_cover', help='Minimum snow cover threshold')
     parser.add_argument('--crid', help='CRID value')
     parser.add_argument('--experimental', help='If true then designates data as experiemntal')
     args = parser.parse_args()
@@ -29,12 +29,11 @@ def main():
         "inputs": {
             "reflectance_dataset": args.reflectance_dataset,
             "frcov_dataset": args.frcov_dataset,
-            "snow_cover": float(args.veg_cover),
+            "snow_cover": float(args.snow_cover),
             "crid": args.crid
         }
     }
     run_config["inputs"]["experimental"] = True if args.experimental.lower() == "true" else False
-
 
     config_file = 'runconfig.json'
 

@@ -26,7 +26,7 @@ inputs:
     - name: snow_cover
       data_type: number
       default: '0.9'
-      description: Minimum vegetation cover threshold
+      description: Minimum snow cover threshold
     - name: crid
       data_type:
       default: '000'
