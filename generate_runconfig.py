@@ -9,6 +9,8 @@ Author: Adam Chlus
 import argparse
 import sys
 import json
+import os
+
 
 def main():
     '''
