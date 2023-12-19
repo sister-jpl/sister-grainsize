@@ -5,6 +5,7 @@ Space-based Imaging Spectroscopy and Thermal PathfindER
 Author: Adam Chlus
 """
 
+import datetime as dt
 import glob
 import json
 import os
@@ -16,6 +17,7 @@ import matplotlib.pyplot as plt
 from osgeo import gdal
 from scipy.interpolate import interp1d
 from PIL import Image
+import pystac
 
 def main():
 
