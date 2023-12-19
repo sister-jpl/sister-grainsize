@@ -142,12 +142,6 @@ def main():
     os.system(f"gdaladdo -minsize 900 {temp_file}")
     os.system(f"gdal_translate {temp_file} {grain_file} -co COMPRESS=LZW -co TILED=YES -co COPY_SRC_OVERVIEWS=YES")
 
-    generate_metadata(rfl_met,
-                      grain_met,
-                      {'product': 'SNOWGRAIN',
-                      'processing_level': 'L2B',
-                      'description' : f'{disclaimer}Snow grain size, microns'})
-
     qlook = np.copy(grain_size)
     qlook[(qlook < interp_data[1].min()) | (qlook  > interp_data[1].max())] = 0
     qlook = (qlook-interp_data[1].min())/(interp_data[1].max()-interp_data[1].min())
