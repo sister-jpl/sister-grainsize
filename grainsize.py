@@ -215,7 +215,7 @@ def main():
             shutil.move(f"output/{fname}", f"output/{grain_basename}/{item.id}/{fname}")
 
 
-def generate_stac_metadata(basename, trait, description, in_meta):
+def generate_stac_metadata(basename, description, in_meta):
 
     out_meta = {}
     out_meta['id'] = basename
@@ -226,13 +226,10 @@ def generate_stac_metadata(basename, trait, description, in_meta):
     # Add first coord to the end of the list to close the polygon
     geometry.append(geometry[0])
     out_meta['geometry'] = geometry
-    product = basename.split('_')[3]
-    if trait is not None:
-        product += f"_{trait}"
     out_meta['properties'] = {
         'sensor': in_meta['sensor'],
         'description': description,
-        'product': product,
+        'product': basename.split('_')[3],
         'processing_level': basename.split('_')[2]
     }
     return out_meta
