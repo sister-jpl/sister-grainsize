@@ -169,7 +169,7 @@ def main():
     # Update the path variables if now experimental
     grain_file = glob.glob("output/*%s.tif" % run_config['inputs']['crid'])[0]
     out_runconfig = glob.glob("output/*%s.runconfig.json" % run_config['inputs']['crid'])[0]
-    log_path = glob.glob("output/*%s.log" % run_config['inputs']['crid'])[0]
+    log_path = out_runconfig_path.replace(".runconfig.json", ".log")
     grain_basename = os.path.basename(grain_file)[:-4]
 
     # Generate STAC
