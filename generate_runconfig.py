@@ -35,6 +35,14 @@ def main():
     }
     run_config["inputs"]["experimental"] = True if args.experimental.lower() == "true" else False
 
+    # Add metadata to runconfig
+    corfl_basename = os.path.basename(run_config["inputs"]["reflectance_dataset"])
+
+    met_json_path = os.path.join("input", corfl_basename, f"{corfl_basename}.met.json")
+    with open(met_json_path, "r") as f:
+        metadata = json.load(f)
+    run_config["metadata"] = metadata
+
     config_file = 'runconfig.json'
 
     with open(config_file, 'w') as outfile:

@@ -172,18 +172,90 @@ def main():
         for file in glob.glob(f"output/SISTER*"):
             shutil.move(file, f"output/EXPERIMENTAL-{os.path.basename(file)}")
 
+    # Update the path variables if now experimental
+    grain_file = glob.glob("output/*%s.tif" % run_config['inputs']['crid'])[0]
+    out_runconfig = glob.glob("output/*%s.runconfig.json" % run_config['inputs']['crid'])[0]
+    log_path = glob.glob("output/*%s.log" % run_config['inputs']['crid'])[0]
+    grain_basename = os.path.basename(grain_file)[:-4]
 
-def generate_metadata(in_file,out_file,metadata):
+    # Generate STAC
+    catalog = pystac.Catalog(id=grain_basename,
+                             description=f'{disclaimer}This catalog contains the output data products of the SISTER '
+                                         f'snow grain size PGE, including a snow grain size cloud-optimized GeoTIFF. '
+                                         f'Execution artifacts including the runconfig file and execution '
+                                         f'log file are included with the snow grain size data.')
 
-    with open(in_file, 'r') as in_obj:
-        in_met =json.load(in_obj)
+    # Add items for data products
+    tif_files = glob.glob("output/*SISTER*.tif")
+    tif_files.sort()
+    description = f'{disclaimer}Snow grain size, microns'
+    for tif_file in tif_files:
+        metadata = generate_stac_metadata(grain_basename, description, run_config["metadata"])
+        assets = {
+            "cog": f"./{os.path.basename(tif_file)}",
+        }
+        # If it's the snow grain size product, then add png, runconfig, and log
+        if os.path.basename(tif_file) == f"{grain_basename}.tif":
+            png_file = tif_file.replace(".tif", ".png")
+            assets["browse"] = f"./{os.path.basename(png_file)}"
+            assets["runconfig"] = f"./{os.path.basename(out_runconfig)}"
+            if os.path.exists(log_path):
+                assets["log"] = f"./{os.path.basename(log_path)}"
+        item = create_item(metadata, assets)
+        catalog.add_item(item)
 
-    for key,value in metadata.items():
-        in_met[key] = value
+    # set catalog hrefs
+    catalog.normalize_hrefs(f"./output/{grain_basename}")
 
-    with open(out_file, 'w') as out_obj:
-        json.dump(in_met,out_obj,indent=3)
+    # save the catalog
+    catalog.describe()
+    catalog.save(catalog_type=pystac.CatalogType.SELF_CONTAINED)
+    print("Catalog HREF: ", catalog.get_self_href())
 
+    # Move the assets from the output directory to the stac item directories
+    for item in catalog.get_items():
+        for asset in item.assets.values():
+            fname = os.path.basename(asset.href)
+            shutil.move(f"output/{fname}", f"output/{grain_basename}/{item.id}/{fname}")
+
+
+def generate_stac_metadata(basename, trait, description, in_meta):
+
+    out_meta = {}
+    out_meta['id'] = basename
+    out_meta['start_datetime'] = dt.datetime.strptime(in_meta['start_time'], "%Y-%m-%dT%H:%M:%SZ")
+    out_meta['end_datetime'] = dt.datetime.strptime(in_meta['end_time'], "%Y-%m-%dT%H:%M:%SZ")
+    # Split corner coordinates string into list
+    geometry = in_meta['bounding_box'].copy()
+    # Add first coord to the end of the list to close the polygon
+    geometry.append(geometry[0])
+    out_meta['geometry'] = geometry
+    product = basename.split('_')[3]
+    if trait is not None:
+        product += f"_{trait}"
+    out_meta['properties'] = {
+        'sensor': in_meta['sensor'],
+        'description': description,
+        'product': product,
+        'processing_level': basename.split('_')[2]
+    }
+    return out_meta
+
+
+def create_item(metadata, assets):
+    item = pystac.Item(
+        id=metadata['id'],
+        datetime=metadata['start_datetime'],
+        start_datetime=metadata['start_datetime'],
+        end_datetime=metadata['end_datetime'],
+        geometry=metadata['geometry'],
+        bbox=None,
+        properties=metadata['properties']
+    )
+    # Add assets
+    for key, href in assets.items():
+        item.add_asset(key=key, asset=pystac.Asset(href=href))
+    return item
 
 
 if __name__ == "__main__":
