@@ -219,13 +219,9 @@ def generate_stac_metadata(basename, description, in_meta):
 
     out_meta = {}
     out_meta['id'] = basename
-    out_meta['start_datetime'] = dt.datetime.strptime(in_meta['start_time'], "%Y-%m-%dT%H:%M:%SZ")
-    out_meta['end_datetime'] = dt.datetime.strptime(in_meta['end_time'], "%Y-%m-%dT%H:%M:%SZ")
-    # Split corner coordinates string into list
-    geometry = in_meta['bounding_box'].copy()
-    # Add first coord to the end of the list to close the polygon
-    geometry.append(geometry[0])
-    out_meta['geometry'] = geometry
+    out_meta['start_datetime'] = dt.datetime.strptime(in_meta['start_datetime'], "%Y-%m-%dT%H:%M:%SZ")
+    out_meta['end_datetime'] = dt.datetime.strptime(in_meta['end_datetime'], "%Y-%m-%dT%H:%M:%SZ")
+    out_meta['geometry'] = in_meta['geometry']
     out_meta['properties'] = {
         'sensor': in_meta['sensor'],
         'description': description,
