@@ -40,7 +40,7 @@ def main():
     # Add metadata to runconfig
     corfl_basename = os.path.basename(run_config["inputs"]["reflectance_dataset"])
 
-    stac_json_path = os.path.join("input", corfl_basename, f"{corfl_basename}.json")
+    stac_json_path = os.path.join(run_config["inputs"]["reflectance_dataset"], f"{corfl_basename}.json")
     with open(stac_json_path, "r") as f:
         stac_item = json.load(f)
     run_config["metadata"] = stac_item["properties"]
