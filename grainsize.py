@@ -8,6 +8,7 @@ Author: Adam Chlus
 import datetime as dt
 import glob
 import json
+import logging
 import os
 import sys
 import shutil
@@ -29,6 +30,17 @@ def main():
     https://doi.org/10.1016/S0034-4257(00)00111-5
 
     '''
+
+    # Set up console logging using root logger
+    logging.basicConfig(format="%(asctime)s %(levelname)s: %(message)s", level=logging.INFO)
+    logger = logging.getLogger("sister-grainsize")
+    # Set up file handler logging
+    handler = logging.FileHandler("pge_run.log")
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s %(levelname)s [%(module)s]: %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.info("Starting grainsize.py")
 
     pge_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -62,6 +74,7 @@ def main():
                             kind = 'cubic',fill_value ='extrapolate')
 
     # Set fractional cover mask
+    logger.info("Setting fractional cover mask")
     fc_obj = gdal.Open(fc_file)
     snow_mask = fc_obj.GetRasterBand(4).ReadAsArray() >= run_config['inputs']['snow_cover']
 
@@ -95,6 +108,7 @@ def main():
         i+=grain_chunk.shape[0]*grain_chunk.shape[1]
 
     #Mask pixels outside of bounds
+    logger.info("Masking pixels outside of bounds")
     grain_size[~rfl.mask['no_data']] = -9999
     grain_size[~snow_mask] = -9999
     qa_mask = (grain_size > interp_data[1].min()) & (grain_size  < interp_data[1].max())
@@ -126,6 +140,7 @@ def main():
     tiff.SetMetadataItem("DESCRIPTION",f"{disclaimer}SNOWGRAIN SIZE")
 
     # Write bands to file
+    logger.info("Writing to file")
     for i,band_name in enumerate(band_names,start=1):
         band = tiff.GetRasterBand(i)
         if i == 1:
@@ -156,8 +171,8 @@ def main():
     shutil.copyfile(run_config_json,
                     grain_file.replace('.tif','.runconfig.json'))
 
-    if os.path.exists("run.log"):
-        shutil.copyfile('run.log',
+    if os.path.exists("pge_run.log"):
+        shutil.copyfile('pge_run.log',
                         grain_file.replace('.tif','.log'))
 
     # If experimental, prefix filenames with "EXPERIMENTAL-"
