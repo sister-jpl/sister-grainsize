@@ -76,7 +76,7 @@ def main():
     # Set fractional cover mask
     logger.info("Setting fractional cover mask")
     fc_obj = gdal.Open(fc_file)
-    snow_mask = fc_obj.GetRasterBand(4).ReadAsArray() >= run_config['inputs']['snow_cover']
+    snow_mask = fc_obj.GetRasterBand(4).ReadAsArray() >= float(run_config['inputs']['snow_cover'])
 
     rfl = ht.HyTools()
     rfl.read_file(rfl_file,'envi')
