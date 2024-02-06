@@ -5,7 +5,10 @@ Space-based Imaging Spectroscopy and Thermal PathfindER
 Author: Adam Chlus
 """
 
+import datetime as dt
+import glob
 import json
+import logging
 import os
 import sys
 import shutil
@@ -15,6 +18,7 @@ import matplotlib.pyplot as plt
 from osgeo import gdal
 from scipy.interpolate import interp1d
 from PIL import Image
+import pystac
 
 def main():
 
@@ -27,12 +31,29 @@ def main():
 
     '''
 
+    # Set up console logging using root logger
+    logging.basicConfig(format="%(asctime)s %(levelname)s: %(message)s", level=logging.INFO)
+    logger = logging.getLogger("sister-grainsize")
+    # Set up file handler logging
+    handler = logging.FileHandler("pge_run.log")
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s %(levelname)s [%(module)s]: %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.info("Starting grainsize.py")
+
     pge_path = os.path.dirname(os.path.realpath(__file__))
 
     run_config_json = sys.argv[1]
 
     with open(run_config_json, 'r') as in_file:
         run_config =json.load(in_file)
+
+    experimental = run_config['inputs']['experimental']
+    if experimental:
+        disclaimer = "(DISCLAIMER: THIS DATA IS EXPERIMENTAL AND NOT INTENDED FOR SCIENTIFIC USE) "
+    else:
+        disclaimer = ""
 
     os.mkdir('output')
     os.mkdir('temp')
@@ -41,13 +62,10 @@ def main():
 
     rfl_base_name = os.path.basename(run_config['inputs']['reflectance_dataset'])
     sister,sensor,level,product,datetime,in_crid = rfl_base_name.split('_')
-    rfl_file = f'input/{rfl_base_name}/{rfl_base_name}.bin'
-    rfl_met = rfl_file.replace('.bin','.met.json')
+    rfl_file = f'{run_config["inputs"]["reflectance_dataset"]}/{rfl_base_name}.bin'
 
     fc_base_name = os.path.basename(run_config['inputs']['frcov_dataset'])
-    fc_file = f'input/{fc_base_name}/{fc_base_name}.tif'
-
-    grain_met = f'output/SISTER_{sensor}_L2B_SNOWGRAIN_{datetime}_{crid}.met.json'
+    fc_file = f'{run_config["inputs"]["frcov_dataset"]}/{fc_base_name}.tif'
 
     data = f'{pge_path}/data/grainsize_v_bandarea_nolin_dozier_2000_interp.csv'
     interp_data = np.loadtxt(data,
@@ -56,6 +74,7 @@ def main():
                             kind = 'cubic',fill_value ='extrapolate')
 
     # Set fractional cover mask
+    logger.info("Setting fractional cover mask")
     fc_obj = gdal.Open(fc_file)
     snow_mask = fc_obj.GetRasterBand(4).ReadAsArray() >= float(run_config['inputs']['snow_cover'])
 
@@ -89,6 +108,7 @@ def main():
         i+=grain_chunk.shape[0]*grain_chunk.shape[1]
 
     #Mask pixels outside of bounds
+    logger.info("Masking pixels outside of bounds")
     grain_size[~rfl.mask['no_data']] = -9999
     grain_size[~snow_mask] = -9999
     qa_mask = (grain_size > interp_data[1].min()) & (grain_size  < interp_data[1].max())
@@ -117,9 +137,10 @@ def main():
 
     tiff.SetGeoTransform(in_file.GetGeoTransform())
     tiff.SetProjection(in_file.GetProjection())
-    tiff.SetMetadataItem("DESCRIPTION","SNOWGRAIN SIZE")
+    tiff.SetMetadataItem("DESCRIPTION",f"{disclaimer}SNOWGRAIN SIZE")
 
     # Write bands to file
+    logger.info("Writing to file")
     for i,band_name in enumerate(band_names,start=1):
         band = tiff.GetRasterBand(i)
         if i == 1:
@@ -134,12 +155,6 @@ def main():
 
     os.system(f"gdaladdo -minsize 900 {temp_file}")
     os.system(f"gdal_translate {temp_file} {grain_file} -co COMPRESS=LZW -co TILED=YES -co COPY_SRC_OVERVIEWS=YES")
-
-    generate_metadata(rfl_met,
-                      grain_met,
-                      {'product': 'SNOWGRAIN',
-                      'processing_level': 'L2B',
-                      'description' : 'Snow grain size, microns'})
 
     qlook = np.copy(grain_size)
     qlook[(qlook < interp_data[1].min()) | (qlook  > interp_data[1].max())] = 0
@@ -156,21 +171,97 @@ def main():
     shutil.copyfile(run_config_json,
                     grain_file.replace('.tif','.runconfig.json'))
 
-    shutil.copyfile('run.log',
-                    grain_file.replace('.tif','.log'))
+    if os.path.exists("pge_run.log"):
+        shutil.copyfile('pge_run.log',
+                        grain_file.replace('.tif','.log'))
+
+    # If experimental, prefix filenames with "EXPERIMENTAL-"
+    if experimental:
+        for file in glob.glob(f"output/SISTER*"):
+            shutil.move(file, f"output/EXPERIMENTAL-{os.path.basename(file)}")
+
+    # Update the path variables if now experimental
+    grain_file = glob.glob("output/*%s.tif" % run_config['inputs']['crid'])[0]
+    out_runconfig = glob.glob("output/*%s.runconfig.json" % run_config['inputs']['crid'])[0]
+    log_path = out_runconfig.replace(".runconfig.json", ".log")
+    grain_basename = os.path.basename(grain_file)[:-4]
+
+    # Generate STAC
+    catalog = pystac.Catalog(id=grain_basename,
+                             description=f'{disclaimer}This catalog contains the output data products of the SISTER '
+                                         f'snow grain size PGE, including a snow grain size cloud-optimized GeoTIFF. '
+                                         f'Execution artifacts including the runconfig file and execution '
+                                         f'log file are included with the snow grain size data.')
+
+    # Add items for data products
+    tif_files = glob.glob("output/*SISTER*.tif")
+    tif_files.sort()
+    description = f'{disclaimer}Snow grain size, microns'
+    for tif_file in tif_files:
+        metadata = generate_stac_metadata(grain_basename, description, run_config["metadata"])
+        assets = {
+            "cog": f"./{os.path.basename(tif_file)}",
+        }
+        # If it's the snow grain size product, then add png, runconfig, and log
+        if os.path.basename(tif_file) == f"{grain_basename}.tif":
+            png_file = tif_file.replace(".tif", ".png")
+            assets["browse"] = f"./{os.path.basename(png_file)}"
+            assets["runconfig"] = f"./{os.path.basename(out_runconfig)}"
+            if os.path.exists(log_path):
+                assets["log"] = f"./{os.path.basename(log_path)}"
+        item = create_item(metadata, assets)
+        catalog.add_item(item)
+
+    # set catalog hrefs
+    catalog.normalize_hrefs(f"./output/{grain_basename}")
+
+    # save the catalog
+    catalog.describe()
+    catalog.save(catalog_type=pystac.CatalogType.SELF_CONTAINED)
+    print("Catalog HREF: ", catalog.get_self_href())
+
+    # Move the assets from the output directory to the stac item directories and create empty .met.json files
+    for item in catalog.get_items():
+        for asset in item.assets.values():
+            fname = os.path.basename(asset.href)
+            shutil.move(f"output/{fname}", f"output/{grain_basename}/{item.id}/{fname}")
+        with open(f"output/{grain_basename}/{item.id}/{item.id}.met.json", mode="w"):
+            pass
 
 
-def generate_metadata(in_file,out_file,metadata):
+def generate_stac_metadata(basename, description, in_meta):
 
-    with open(in_file, 'r') as in_obj:
-        in_met =json.load(in_obj)
+    out_meta = {}
+    out_meta['id'] = basename
+    out_meta['start_datetime'] = dt.datetime.strptime(in_meta['start_datetime'], "%Y-%m-%dT%H:%M:%SZ")
+    out_meta['end_datetime'] = dt.datetime.strptime(in_meta['end_datetime'], "%Y-%m-%dT%H:%M:%SZ")
+    out_meta['geometry'] = in_meta['geometry']
+    base_tokens = basename.split('_')
+    out_meta['collection'] = f"SISTER_{base_tokens[1]}_{base_tokens[2]}_{base_tokens[3]}_{base_tokens[5]}"
+    out_meta['properties'] = {
+        'sensor': in_meta['sensor'],
+        'description': description,
+        'product': base_tokens[3],
+        'processing_level': base_tokens[2]
+    }
+    return out_meta
 
-    for key,value in metadata.items():
-        in_met[key] = value
 
-    with open(out_file, 'w') as out_obj:
-        json.dump(in_met,out_obj,indent=3)
-
+def create_item(metadata, assets):
+    item = pystac.Item(
+        id=metadata['id'],
+        datetime=metadata['start_datetime'],
+        start_datetime=metadata['start_datetime'],
+        end_datetime=metadata['end_datetime'],
+        geometry=metadata['geometry'],
+        collection=metadata['collection'],
+        bbox=None,
+        properties=metadata['properties']
+    )
+    # Add assets
+    for key, href in assets.items():
+        item.add_asset(key=key, asset=pystac.Asset(href=href))
+    return item
 
 
 if __name__ == "__main__":

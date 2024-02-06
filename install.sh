@@ -5,6 +5,7 @@ conda create -y --name sister python=3.8
 source activate sister
 
 conda install gdal -y
+pip install pystac==1.8.4
 
 git clone https://github.com/EnSpec/hytools.git -b 1.5.0
 cd hytools
